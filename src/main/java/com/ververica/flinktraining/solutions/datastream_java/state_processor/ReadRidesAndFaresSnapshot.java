@@ -59,7 +59,7 @@ public class ReadRidesAndFaresSnapshot {
 		/***************************************************************************************
 		 Update this path to point to a checkpoint or savepoint from RidesAndFaresSolution.java
 		 ***************************************************************************************/
-		String pathToSnapshot = "file:///tmp/checkpoints/12529c8286f3bb9721dbd7076832ff06/chk-5";
+		String pathToSnapshot = "file:///tmp/checkpoints/ce743895f0b6ec75fafd45ca22f88ac5/chk-1";
 
 		ExistingSavepoint sp = Savepoint.load(bEnv, pathToSnapshot, backend);
 
