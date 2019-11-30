@@ -16,18 +16,20 @@
 
 package com.ververica.flinktraining.exercises.datastream_java.process;
 
-import com.ververica.flinktraining.exercises.datastream_java.datatypes.TaxiRide;
-import com.ververica.flinktraining.exercises.datastream_java.sources.TaxiRideSource;
-import com.ververica.flinktraining.exercises.datastream_java.utils.MissingSolutionException;
-import com.ververica.flinktraining.exercises.datastream_java.utils.ExerciseBase;
+import org.apache.flink.api.common.state.ValueState;
+import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.TimeCharacteristic;
-import org.apache.flink.streaming.api.TimerService;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
+import org.joda.time.DateTime;
+
+import com.ververica.flinktraining.exercises.datastream_java.datatypes.TaxiRide;
+import com.ververica.flinktraining.exercises.datastream_java.sources.TaxiRideSource;
+import com.ververica.flinktraining.exercises.datastream_java.utils.ExerciseBase;
 
 /**
  * The "Long Ride Alerts" exercise of the Flink training
@@ -68,18 +70,57 @@ public class LongRidesExercise extends ExerciseBase {
 
 	public static class MatchFunction extends KeyedProcessFunction<Long, TaxiRide, TaxiRide> {
 
+		private static final long TWO_HOURS = 2 * 3600 * 1000L;
+		private ValueState<TaxiRide> start;
+		private ValueState<TaxiRide> end;
+		
 		@Override
 		public void open(Configuration config) throws Exception {
-			throw new MissingSolutionException();
+			start = getRuntimeContext().getState(new ValueStateDescriptor<>("startState", TaxiRide.class));
+			end = getRuntimeContext().getState(new ValueStateDescriptor<>("endState", TaxiRide.class));
 		}
 
 		@Override
 		public void processElement(TaxiRide ride, Context context, Collector<TaxiRide> out) throws Exception {
-			TimerService timerService = context.timerService();
+			if (ride.isStart) { //TODO endtime not empty? improvement?
+				start.update(ride);
+				
+				TaxiRide result = end.value();
+				if (result == null) {
+					context.timerService().registerEventTimeTimer(ride.startTime.getMillis() + TWO_HOURS);
+				} else if (result.endTime.getMillis() > ride.startTime.getMillis() + TWO_HOURS) {
+					out.collect(ride);
+					start.clear();
+					end.clear();
+					context.timerService().deleteProcessingTimeTimer(ride.startTime.getMillis() + TWO_HOURS);
+				}
+
+			} else {
+				end.update(ride);
+				
+				TaxiRide result = start.value();
+				if (result == null) {
+					// wait for start ride event
+				} else {
+					if ((ride.endTime.getMillis() - result.startTime.getMillis()) > TWO_HOURS) {
+						out.collect(result);
+						start.clear();
+						end.clear();
+						context.timerService().deleteProcessingTimeTimer(ride.startTime.getMillis() + TWO_HOURS);
+					}
+			    }
+			}
 		}
 
 		@Override
 		public void onTimer(long timestamp, OnTimerContext context, Collector<TaxiRide> out) throws Exception {
+			TaxiRide resultStart = start.value();
+	        if (resultStart != null && end.value() == null) {
+	        	out.collect(resultStart);
+	        	start.clear();
+	        	end.clear();
+	        }
 		}
 	}
+	
 }

@@ -79,6 +79,7 @@ public class RidesAndFaresExercise extends ExerciseBase {
 
 		private MapState<Long, TaxiRide> mapRide;
 		private MapState<Long, TaxiFare> mapFare;
+		// the solution use ValueState, better? and it clear the state when matched.
 		
 		@Override
 		public void open(Configuration config) throws Exception {
